@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"html/template"
 	"io/ioutil"
 	"log"
@@ -31,7 +32,12 @@ type server struct {
 
 func main() {
 	var err error
-	r, err := http.Get("http://172.17.42.1:4001/v2/keys/endpoints")
+
+	etcdEndpointsUrl := os.Getenv("ETCD_ENDPOINTS_URL")
+	if etcdEndpointsUrl == "" {
+		log.Fatal(errors.New("Sorry, you must specify the ETCD_ENDPOINTS_URL env var!"))
+	}
+	r, err := http.Get(etcdEndpointsUrl)
 	if err != nil {
 		log.Fatal(err)
 	}
