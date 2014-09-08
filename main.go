@@ -2,13 +2,12 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"html/template"
-	"io/ioutil"
 	"log"
-	"net/http"
 	"os"
 	"strings"
+
+	"github.com/coreos/go-etcd/etcd"
 )
 
 type etcdresponse struct {
@@ -29,52 +28,75 @@ type server struct {
 	Service string
 }
 
-func main() {
-	var err error
-	r, err := http.Get("http://172.17.42.1:4001/v2/keys/endpoints")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
-	var n etcdresponse
-	json.Unmarshal(body, &n)
-	log.Println(n)
-	locations := make([]server, 0)
-	for _, endpoint := range n.Node.Nodes {
-		keyparts := strings.Split(endpoint.Key, "/")
+func findEndpoints(nodes etcd.Nodes) []server {
+	endpoints := make([]server, 0)
+
+	log.Println("Current endpoints:")
+	for _, n := range nodes {
+		log.Printf("%s: %s\n", n.Key, n.Value)
+		keyparts := strings.Split(n.Key, "/")
 		log.Println(keyparts)
+
 		s := server{
-			Host:    endpoint.Value,
+			Host:    n.Value,
 			Service: keyparts[len(keyparts)-1],
 		}
-		locations = append(locations, s)
+		endpoints = append(endpoints, s)
 	}
+	return endpoints
+}
+
+func writeNginxConfig(endpoints []server) error {
 	tmpl, err := template.ParseFiles("nginx.template")
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	// open output file
 	fo, err := os.Create("/etc/nginx/nginx.conf")
 	if err != nil {
-		panic(err)
+		return err
 	}
 	// close fo on exit and check for its returned error
-	defer func() {
-		if err := fo.Close(); err != nil {
-			panic(err)
-		}
-	}()
+	defer fo.Close()
+
 	// make a write buffer
 	w := bufio.NewWriter(fo)
-	err = tmpl.Execute(w, locations)
+	err = tmpl.Execute(w, endpoints)
+	if err != nil {
+		return err
+	}
+	if err = w.Flush(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func main() {
+	var err error
+	client := etcd.NewClient([]string{"http://172.17.42.1:4001"})
+	resp, err := client.Get("endpoints", true, true)
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err = w.Flush(); err != nil {
-		panic(err)
+
+	locations := findEndpoints(resp.Node.Nodes)
+	err = writeNginxConfig(locations)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	watchChan := make(chan *etcd.Response)
+	go client.Watch("/endpoints", 0, false, watchChan, nil)
+	log.Println("Waiting for an update...")
+
+	r := <-watchChan
+
+	log.Printf("Got updated endpoints:")
+
+	locations = findEndpoints(r.Node.Nodes)
+
+	err = writeNginxConfig(locations)
+	if err != nil {
+		log.Fatal(err)
 	}
 }
