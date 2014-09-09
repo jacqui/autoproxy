@@ -52,7 +52,7 @@ func writeNginxConfig(endpoints []server) error {
 		return err
 	}
 	// open output file
-	fo, err := os.Create("/etc/nginx/nginx.conf")
+	fo, err := os.Create("/etc/nginx/nginx.conf.tmp")
 	if err != nil {
 		return err
 	}
