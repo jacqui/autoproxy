@@ -1,13 +1,25 @@
-sudo service nginx start
-./autoproxy
-sudo service nginx restart
+#!/usr/bin/env bash
 
-cat /etc/nginx/nginx.conf
+# generate initial configs
+./autoproxy
+
+# copy to correct path
+# we store both versions for comparison later
+sudo cp /etc/nginx/nginx.conf.tmp /etc/nginx/nginx.conf;
+
+# and start nginx
+sudo service nginx start
 
 while :;
 do
-  curl -L -s "http://172.17.42.1:4001/v2/keys/endpoints?wait=true&recursive=true";
-  ./autoproxy
-  sudo service nginx restart
-  cat /etc/nginx/nginx.conf
+  # compare autoproxy-generated config to existing one
+  is_diff=`diff --brief /etc/nginx/nginx.conf.tmp /etc/nginx/nginx.conf`
+
+  if [ -z "$is_diff" ] ; then
+    echo "no difference in files, not restarting nginx";
+  else
+    sudo cp /etc/nginx/nginx.conf.tmp /etc/nginx/nginx.conf;
+    cat /etc/nginx/nginx.conf
+    sudo service nginx reload;
+  fi				
 done
