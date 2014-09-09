@@ -2,15 +2,18 @@ events {
     worker_connections  1024;
 }
 
-http{
-	{{range .}}
-	server{
-		listen 80;
-		server_name {{.Service}}.editor.nytlabs.com
-		location / {
-			proxy_pass http://{{.Host}}/;
-			proxy_set_header Host $host;
-		}
-	}
-	{{end}}
+http {
+
+  server {
+
+    listen 80;
+
+    {{range .}}
+      location /{{.Service}} {
+        proxy_pass http://{{.Host}};
+      }
+
+    {{end}}
+  }
+
 }
