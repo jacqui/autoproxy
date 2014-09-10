@@ -51,30 +51,36 @@ func writeNginxConfig(endpoints []server) error {
 	if err != nil {
 		return err
 	}
+	log.Println("Parsed nginx template:", tmpl)
 	// open output file
 	fo, err := os.Create("/etc/nginx/nginx.conf.tmp")
 	if err != nil {
 		return err
 	}
+	log.Println("Created temporary nginx config file:", fo)
 	// close fo on exit and check for its returned error
 	defer fo.Close()
 
 	// make a write buffer
 	w := bufio.NewWriter(fo)
+	log.Println("Made a write buffer", w)
+
 	err = tmpl.Execute(w, endpoints)
+	log.Println("executed template variables")
 	if err != nil {
 		return err
 	}
 	if err = w.Flush(); err != nil {
 		return err
 	}
+	log.Println("done, returning")
 	return nil
 }
 
 func main() {
 	var err error
 	client := etcd.NewClient([]string{"http://172.17.42.1:4001"})
-	resp, err := client.Get("endpoints", true, true)
+	resp, err := client.Get("endpoints", false, false)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -85,18 +91,23 @@ func main() {
 		log.Fatal(err)
 	}
 
-	watchChan := make(chan *etcd.Response)
-	go client.Watch("/endpoints", 0, false, watchChan, nil)
+	watchChan := make(chan *etcd.Response, 10)
+	stopChan := make(chan bool, 1)
+
+	go client.Watch("/endpoints", 0, false, watchChan, stopChan)
 	log.Println("Waiting for an update...")
 
-	r := <-watchChan
-
-	log.Printf("Got updated endpoints:")
-
-	locations = findEndpoints(r.Node.Nodes)
-
-	err = writeNginxConfig(locations)
-	if err != nil {
-		log.Fatal(err)
+	for {
+		select {
+		case <- stopChan:
+			log.Println("Stop channel hit")
+		case r := <- watchChan:
+			log.Println("Got updated endpoints:")
+			locations = findEndpoints(r.Node.Nodes)
+			err = writeNginxConfig(locations)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
 	}
 }
