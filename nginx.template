@@ -9,8 +9,9 @@ http {
     listen 80;
 
     {{range .}}
-      location /{{.Service}} {
+      location /{{.Service}}/ {
         proxy_pass http://{{.Host}};
+        proxy_set_header Host $host;
       }
 
     {{end}}
