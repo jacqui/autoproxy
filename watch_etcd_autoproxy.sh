@@ -18,8 +18,11 @@ do
   if [ -z "$is_diff" ] ; then
     echo "no difference in files, not restarting nginx";
   else
+    echo "copying /etc/nginx/nginx.conf.tmp -> /etc/nginx/nginx.conf";
     sudo cp /etc/nginx/nginx.conf.tmp /etc/nginx/nginx.conf;
     cat /etc/nginx/nginx.conf
+    echo "reloading nginx...";
     sudo service nginx reload;
+    echo "done!";
   fi				
 done
