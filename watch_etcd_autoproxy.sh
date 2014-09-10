@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # generate initial configs
-./autoproxy
+./autoproxy &
 
 # copy to correct path
 # we store both versions for comparison later
@@ -13,10 +13,8 @@ sudo service nginx start
 while :;
 do
   # compare autoproxy-generated config to existing one
-  is_diff=`diff --brief /etc/nginx/nginx.conf.tmp /etc/nginx/nginx.conf`
-
-  if [ -z "$is_diff" ] ; then
-    echo "no difference in files, not restarting nginx";
+  if diff --brief /etc/nginx/nginx.conf.tmp /etc/nginx/nginx.conf; then
+    sleep 10;
   else
     echo "copying /etc/nginx/nginx.conf.tmp -> /etc/nginx/nginx.conf";
     sudo cp /etc/nginx/nginx.conf.tmp /etc/nginx/nginx.conf;
